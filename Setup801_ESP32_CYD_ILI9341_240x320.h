@@ -15,6 +15,7 @@
 
 #define TFT_BL   21            // LED back-light control pin
 #define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
+#define TFT_INVERSION_OFF
 
 // For ESP32 Dev board (only tested with ILI9341 display)
 // The hardware SPI can be mapped to any pins
@@ -46,7 +47,8 @@
 #define SMOOTH_FONT
 
 //#define SPI_FREQUENCY  27000000
-#define SPI_FREQUENCY  55000000
+//#define SPI_FREQUENCY  55000000
+#define SPI_FREQUENCY 20000000
 
 // Optional reduced SPI frequency for reading TFT
 #define SPI_READ_FREQUENCY  20000000
@@ -65,4 +67,5 @@
 // Transactions are automatically enabled by the library for an ESP32 (to use HAL mutex)
 // so changing it here has no effect
 
+// #define SUPPORT_TRANSACTIONS
 // #define SUPPORT_TRANSACTIONS
