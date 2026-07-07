@@ -1,3 +1,25 @@
+## Changes from base fork
+
+### Bug fixes
+- Fixed several incorrect library includes (`JsonListener.h`, `JsonStreamingParser.h`) that were leftover from an earlier version of the code and caused compile errors — `OpenWeather.h`/`JSON_Decoder.h` already provide everything needed.
+- Fixed `TIMEZONE` macro in `All_Settings.h` — was pointing to a `TimeChangeRule` (`usEDT`) instead of the actual `Timezone` object (`usET`), causing a compile error on `.toLocal()`.
+- Resolved a white-screen-after-WiFi-connect issue — traced to an incorrect ESP32 board selection in Arduino IDE (not a code issue).
+
+### Display tweaks
+- **Time format:** Main clock now displays in 12-hour format with AM/PM (previously 24-hour). AM/PM is drawn in the small font since the large clock font (`NSBold36.vlw`) only contains digits and a colon.
+- **Forecast day labels:** Changed from orange to sky blue for better contrast/less yellow on screen.
+- **Forecast temps:** Added a "/" separator between high and low temperature.
+- **Wind speed label:** Moved above the wind direction arrow icon (previously below).
+- **Barometric pressure:**
+  - Removed inaccurate imperial (inHg) conversion — the OpenWeatherMap API always returns pressure in hPa regardless of the `units` setting, and the old code just relabeled the raw hPa value as "in" without converting it. Now always displays in hPa/millibars.
+  - Added color coding based on pressure range: GREENYELLOW (≥1000 hPa, normal), ORANGE (980–1000 hPa, tropical storm range), RED (<980 hPa, severe low pressure).
+
+### New feature
+- **Auto-dimming backlight:** Added ambient light sensing via the onboard LDR (GPIO 34) to automatically adjust screen brightness via PWM (backlight pin GPIO 21), instead of a fixed always-on backlight.
+
+
+
+
 # ESP32 Cheap Yellow Display (CYD) Weather Station with 3 days Forecast
 
 This is the accompanying repository for my article "Create an Internet Weather Station with 3 days Forecast on an ESP32 Cheap Yellow Display ("CYD")" available here: https://medium.com/@androidcrypto/create-an-internet-weather-station-with-3-days-forecast-on-an-esp32-cheap-yellow-display-cyd-15eb5c353b1d
