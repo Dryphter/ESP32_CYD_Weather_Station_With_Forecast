@@ -17,6 +17,8 @@
 ### New feature
 - **Auto-dimming backlight:** Added ambient light sensing via the onboard LDR (GPIO 34) to automatically adjust screen brightness via PWM (backlight pin GPIO 21), instead of a fixed always-on backlight.
 
+### New Feature
+- ** Added webconfig: webserver for user to enter wifi settings (SSID/Password), timezone, lattitude/longitude, OpenWeather API key, units (imperial/metric). Removed these parameters from All_settings.h so they no longer need to be defined upfront and compiled in.  To open the Webserver, hold the Boot button for 3-4 seconds once the weather station is running. Connect to WeatherStationSetup SSID and set parameters.
 
 
 
