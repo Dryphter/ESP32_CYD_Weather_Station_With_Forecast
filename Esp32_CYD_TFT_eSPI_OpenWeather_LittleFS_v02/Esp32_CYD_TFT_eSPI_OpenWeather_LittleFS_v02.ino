@@ -118,7 +118,19 @@ const uint32_t BACKLIGHT_UPDATE_INTERVAL = 500;  // ms between brightness checks
 #include "NTP_Time.h"  // Attached to this sketch, see that tab for library needs
 // Time zone correction library: https://github.com/JChristensen/Timezone
 
-/***************************************************************************************
+/****** Runtime-selectable timezone (replaces the old compile-time TIMEZONE macro) **/
+const char* tzNames[] = { "UK", "euCET", "ausET", "usET", "usCT", "usMT", "usAZ", "usPT" };
+Timezone* tzObjects[] = { &UK, &euCET, &ausET, &usET, &usCT, &usMT, &usAZ, &usPT };
+const int NUM_TIMEZONES = 8;
+
+Timezone* activeTimezone = &usET;  // Default until loadConfig() runs
+#define TIMEZONE (*activeTimezone)
+/********************************************************************************/
+
+
+
+
+/**************************************************************************************
 **                          Define the globals and class instances
 ***************************************************************************************/
 
@@ -137,6 +149,9 @@ long lastDownloadUpdate = millis();
 /***************************************************************************************
 **                          Declare prototypes
 ***************************************************************************************/
+void loadConfig();
+void saveConfig();
+void runWiFiManager();
 void updateBacklight();
 void updateData();
 void drawProgress(uint8_t percentage, String text);
@@ -172,6 +187,7 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
 ***************************************************************************************/
 void setup() {
   Serial.begin(115200);
+  loadConfig(); //load config variables: timezone, wifi, etc
   delay(500);
   Serial.println(PROGRAM_VERSION);
 
@@ -232,21 +248,26 @@ setCpuFrequencyMhz(240);
   tft.setTextPadding(240);  // Pad next drawString() text to full width to over-write old text
 
 //Call once for ESP32 and ESP8266
-#if !defined(ARDUINO_ARCH_MBED)
-    WiFi.mode(WIFI_STA);
-    delay(100);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  WiFi.setSleep(false);
-#endif
+/*Original WIFI block. Replaced with WifiManager*/
+// #if !defined(ARDUINO_ARCH_MBED)
+//     WiFi.mode(WIFI_STA);
+//     delay(100);
+//     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+//   WiFi.setSleep(false);
+// #endif
 
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-#if defined(ARDUINO_ARCH_MBED) || defined(ARDUINO_ARCH_RP2040)
-    if (WiFi.status() != WL_CONNECTED) WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-#endif
-    delay(500);
-  }
-//delay(3000);  // stand-in for WiFi connect time
+//   while (WiFi.status() != WL_CONNECTED) {
+//     Serial.print(".");
+// #if defined(ARDUINO_ARCH_MBED) || defined(ARDUINO_ARCH_RP2040)
+//     if (WiFi.status() != WL_CONNECTED) WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+// #endif
+//     delay(500);
+//   }
+    
+    pinMode(0, INPUT_PULLUP);
+    setupWiFiManagerParams();
+    runWiFiManager(false);
+    /**********************************************/
 
   Serial.println();
   tft.setTextDatum(BC_DATUM);
@@ -267,6 +288,27 @@ setCpuFrequencyMhz(240);
 ***************************************************************************************/
 void loop() {
 
+  //Check for long press on Boot button to start webserver & prompt for settings
+  static uint32_t buttonPressStart = 0;
+if (digitalRead(0) == LOW) {
+  if (buttonPressStart == 0) buttonPressStart = millis();
+  if (millis() - buttonPressStart > 3000) {
+    Serial.println("Button held 3s - entering config portal");
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.loadFont(AA_FONT_SMALL, LittleFS);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.drawString("Entering WiFi Setup...", 120, 160);
+    tft.unloadFont();
+    runWiFiManager(true);
+    buttonPressStart = 0;
+    booted = true;  // force a full weather refresh after reconnecting
+  }
+} else {
+  buttonPressStart = 0;
+}
+  
+  
   // Check if we should update weather information
   if (booted || (millis() - lastDownloadUpdate > 1000UL * UPDATE_INTERVAL_SECS)) {
     updateData();
@@ -1006,3 +1048,4 @@ void updateBacklight() {
 //  Added forecast for 4th day
 //  Added cloud cover and humidity in lieu of Moon rise/set
 //  Adapted to be compatible with ESP32
+
