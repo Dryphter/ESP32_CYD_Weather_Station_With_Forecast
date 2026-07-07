@@ -146,12 +146,16 @@ GfxUi ui = GfxUi(&tft);  // Jpeg and bmpDraw functions
 
 long lastDownloadUpdate = millis();
 
+uint32_t lastNTPSync = 0;
+const uint32_t NTP_RESYNC_INTERVAL = 6UL * 60UL * 60UL * 1000UL;  // 6 hours
+
 /***************************************************************************************
 **                          Declare prototypes
 ***************************************************************************************/
 void loadConfig();
 void saveConfig();
-void runWiFiManager();
+void runWiFiManager(bool forcePortal);   // <- note: also needs the (bool) parameter now
+void setupWiFiManagerParams();           // <- this one was missing entirely
 void updateBacklight();
 void updateData();
 void drawProgress(uint8_t percentage, String text);
@@ -247,22 +251,6 @@ setCpuFrequencyMhz(240);
   tft.drawString("Connecting to WiFi", 120, 240);
   tft.setTextPadding(240);  // Pad next drawString() text to full width to over-write old text
 
-//Call once for ESP32 and ESP8266
-/*Original WIFI block. Replaced with WifiManager*/
-// #if !defined(ARDUINO_ARCH_MBED)
-//     WiFi.mode(WIFI_STA);
-//     delay(100);
-//     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-//   WiFi.setSleep(false);
-// #endif
-
-//   while (WiFi.status() != WL_CONNECTED) {
-//     Serial.print(".");
-// #if defined(ARDUINO_ARCH_MBED) || defined(ARDUINO_ARCH_RP2040)
-//     if (WiFi.status() != WL_CONNECTED) WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-// #endif
-//     delay(500);
-//   }
     
     pinMode(0, INPUT_PULLUP);
     setupWiFiManagerParams();
@@ -288,50 +276,51 @@ setCpuFrequencyMhz(240);
 ***************************************************************************************/
 void loop() {
 
-  //Check for long press on Boot button to start webserver & prompt for settings
+  // Check for long press on Boot button to start webserver & prompt for settings
   static uint32_t buttonPressStart = 0;
-if (digitalRead(0) == LOW) {
-  if (buttonPressStart == 0) buttonPressStart = millis();
-  if (millis() - buttonPressStart > 3000) {
-    Serial.println("Button held 3s - entering config portal");
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.loadFont(AA_FONT_SMALL, LittleFS);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.drawString("Entering WiFi Setup...", 120, 160);
-    tft.unloadFont();
-    runWiFiManager(true);
+  if (digitalRead(0) == LOW) {
+    if (buttonPressStart == 0) buttonPressStart = millis();
+    if (millis() - buttonPressStart > 3000) {
+      Serial.println("Button held 3s - entering config portal");
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextDatum(MC_DATUM);
+      tft.loadFont(AA_FONT_SMALL, LittleFS);
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      tft.drawString("Entering WiFi Setup...", 120, 160);
+      tft.unloadFont();
+      runWiFiManager(true);
+      buttonPressStart = 0;
+      booted = true;  // force a full weather refresh after reconnecting
+    }
+  } else {
     buttonPressStart = 0;
-    booted = true;  // force a full weather refresh after reconnecting
   }
-} else {
-  buttonPressStart = 0;
-}
-  
-  
+
   // Check if we should update weather information
   if (booted || (millis() - lastDownloadUpdate > 1000UL * UPDATE_INTERVAL_SECS)) {
     updateData();
     lastDownloadUpdate = millis();
   }
 
-  // If minute has changed then request new time from NTP server
+  // Update displayed time every minute
   if (booted || minute() != lastMinute) {
-    // Update displayed time first as we may have to wait for a response
     drawTime();
     lastMinute = minute();
-
-    // Request and synchronise the local clock
-    syncTime();
-
-  if (millis() - lastBacklightUpdate > BACKLIGHT_UPDATE_INTERVAL) {
-    updateBacklight();
-    lastBacklightUpdate = millis();
-}
-
 #ifdef SCREEN_SERVER
     screenServer();
 #endif
+  }
+
+  // Re-sync with NTP server periodically, not every minute
+  if (booted || (millis() - lastNTPSync > NTP_RESYNC_INTERVAL)) {
+    syncTime();
+    lastNTPSync = millis();
+  }
+
+  // Check backlight brightness every loop iteration
+  if (millis() - lastBacklightUpdate > BACKLIGHT_UPDATE_INTERVAL) {
+    updateBacklight();
+    lastBacklightUpdate = millis();
   }
 
   booted = false;
@@ -1048,4 +1037,3 @@ void updateBacklight() {
 //  Added forecast for 4th day
 //  Added cloud cover and humidity in lieu of Moon rise/set
 //  Adapted to be compatible with ESP32
-
