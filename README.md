@@ -1,9 +1,7 @@
 ## Changes from base fork
 
 ### Bug fixes
-- Fixed several incorrect library includes (`JsonListener.h`, `JsonStreamingParser.h`) that were leftover from an earlier version of the code and caused compile errors — `OpenWeather.h`/`JSON_Decoder.h` already provide everything needed.
-- Fixed `TIMEZONE` macro in `All_Settings.h` — was pointing to a `TimeChangeRule` (`usEDT`) instead of the actual `Timezone` object (`usET`), causing a compile error on `.toLocal()`.
-- Resolved a white-screen-after-WiFi-connect issue — traced to an incorrect ESP32 board selection in Arduino IDE (not a code issue).
+- Resolved a white-screen-after-WiFi-connect issue — traced to an incorrect ESP32 board selection in Arduino IDE (not a code issue). Resolved by selecting ESP32 WROVER (all versions) in Arduino IDE. 
 
 ### Display tweaks
 - **Time format:** Main clock now displays in 12-hour format with AM/PM (previously 24-hour). AM/PM is drawn in the small font since the large clock font (`NSBold36.vlw`) only contains digits and a colon.
