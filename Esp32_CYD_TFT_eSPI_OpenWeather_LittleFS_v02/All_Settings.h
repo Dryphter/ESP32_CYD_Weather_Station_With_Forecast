@@ -18,11 +18,13 @@
 //////////////////////////////
 // Settings defined below
 
-#define WIFI_SSID      "-your-router-name-"
-#define WIFI_PASSWORD  "-your-router-password-"
+//Removed SSID/Password as it now comes from webserver
+//#define WIFI_SSID      "-----"
+//#define WIFI_PASSWORD  "-----"
 
 //#define TIMEZONE UK // See NTP_Time.h tab for other "Zone references", UK, usMT etc
-#define TIMEZONE euCET
+/*Commented out: moving timezone setting to webserver variable so it doesn't need to be compiled in*/
+//#define TIMEZONE usET
 
 // Update every 15 minutes, up to 1000 request per day are free (viz average of ~40 per hour)
 const int UPDATE_INTERVAL_SECS = 15UL * 60UL;  // 15 minutes
@@ -30,18 +32,17 @@ const int UPDATE_INTERVAL_SECS = 15UL * 60UL;  // 15 minutes
 // Pins for the TFT interface are defined in the User_Config.h file inside the TFT_eSPI library
 
 // For units use "metric" or "imperial"
-const String units = "metric";
+String units = "imperial";
 
 // Sign up for a key and read API configuration info here:
 // https://openweathermap.org/, change x's to your API key
-const String api_key = "-your-openweathermap.org api key-";
+String api_key = "---your API key";
 
 // Set the forecast longitude and latitude to at least 4 decimal places
 
-// New York, Empire State Building
-// 40.749778527083656, -73.98629815117553
-const String latitude =  "40.749778527083656"; // 90.0000 to -90.0000 negative for Southern hemisphere
-const String longitude = "-73.98629815117553"; // 180.000 to -180.000 negative for West
+//Update with Lat/Lon for the area you want
+String latitude =  "27.939566"; // 90.0000 to -90.0000 negative for Southern hemisphere
+String longitude = "-82.286491"; // 180.000 to -180.000 negative for West
 
 // For language codes see https://openweathermap.org/current#multi
 const String language = "en";  // Default language = en = English
