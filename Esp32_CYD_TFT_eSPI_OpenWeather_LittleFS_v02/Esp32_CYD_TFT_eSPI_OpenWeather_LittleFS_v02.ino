@@ -77,6 +77,23 @@ const char* PROGRAM_VERSION = "ESP32 CYD OpenWeatherMap LittleFS V02";
 // Additional functions
 #include "GfxUi.h"  // Attached to this sketch
 
+//*****************************************************************************************
+// Light Detecting Resistor - used to PWM control pin 21 (LED brightness)
+//*****************************************************************************************
+#define LDR_PIN 34
+#define LDR_PWM_CHANNEL 0
+#define LDR_PWM_FREQ 5000
+#define LDR_PWM_RESOLUTION 8  // 0-255 brightness range
+
+int minBrightness = 40;    // Dimmest allowed level (avoid going fully black)
+int maxBrightness = 255;   // Brightest level
+
+int currentBrightness = 255;
+uint32_t lastBacklightUpdate = 0;
+const uint32_t BACKLIGHT_UPDATE_INTERVAL = 500;  // ms between brightness checks
+//******************************************************************************************
+
+
 // Choose library to load
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -120,6 +137,7 @@ long lastDownloadUpdate = millis();
 /***************************************************************************************
 **                          Declare prototypes
 ***************************************************************************************/
+void updateBacklight();
 void updateData();
 void drawProgress(uint8_t percentage, String text);
 void drawTime();
@@ -153,11 +171,19 @@ bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) 
 **                          Setup
 ***************************************************************************************/
 void setup() {
-  Serial.begin(250000);
+  Serial.begin(115200);
   delay(500);
   Serial.println(PROGRAM_VERSION);
 
+setCpuFrequencyMhz(240);
+
   tft.begin();
+  //***************** LDR *****************************************************
+  analogSetAttenuation(ADC_0db);  // Improves LDR reading sensitivity
+  ledcSetup(LDR_PWM_CHANNEL, LDR_PWM_FREQ, LDR_PWM_RESOLUTION);
+  ledcAttachPin(TFT_BL, LDR_PWM_CHANNEL);
+  ledcWrite(LDR_PWM_CHANNEL, maxBrightness);  // Start at full brightness
+  //***************************************************************************
   tft.setRotation(0);  // For 320x480 screen
   tft.fillScreen(TFT_BLACK);
 
@@ -205,9 +231,12 @@ void setup() {
   tft.drawString("Connecting to WiFi", 120, 240);
   tft.setTextPadding(240);  // Pad next drawString() text to full width to over-write old text
 
-// Call once for ESP32 and ESP8266
+//Call once for ESP32 and ESP8266
 #if !defined(ARDUINO_ARCH_MBED)
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.mode(WIFI_STA);
+    delay(100);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.setSleep(false);
 #endif
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -217,12 +246,14 @@ void setup() {
 #endif
     delay(500);
   }
-  Serial.println();
+//delay(3000);  // stand-in for WiFi connect time
 
+  Serial.println();
   tft.setTextDatum(BC_DATUM);
   tft.setTextPadding(240);        // Pad next drawString() text to full width to over-write old text
   tft.drawString(" ", 120, 220);  // Clear line above using set padding width
   tft.drawString("Fetching weather data...", 120, 240);
+  
 
   // Fetch the time
   udp.begin(localPort);
@@ -250,6 +281,11 @@ void loop() {
 
     // Request and synchronise the local clock
     syncTime();
+
+  if (millis() - lastBacklightUpdate > BACKLIGHT_UPDATE_INTERVAL) {
+    updateBacklight();
+    lastBacklightUpdate = millis();
+}
 
 #ifdef SCREEN_SERVER
     screenServer();
@@ -352,16 +388,20 @@ void drawProgress(uint8_t percentage, String text) {
 /***************************************************************************************
 **                          Draw the clock digits
 ***************************************************************************************/
+//Updated to show 12hr time not 24hr time
 void drawTime() {
   tft.loadFont(AA_FONT_LARGE, LittleFS);
 
   // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
   time_t local_time = TIMEZONE.toLocal(now(), &tz1_Code);
 
-  String timeNow = "";
+  uint8_t h = hour(local_time);
+  bool isPM = (h >= 12);
+  uint8_t h12 = h % 12;
+  if (h12 == 0) h12 = 12;
 
-  if (hour(local_time) < 10) timeNow += "0";
-  timeNow += hour(local_time);
+  String timeNow = "";
+  timeNow += h12;
   timeNow += ":";
   if (minute(local_time) < 10) timeNow += "0";
   timeNow += minute(local_time);
@@ -371,12 +411,48 @@ void drawTime() {
   tft.setTextPadding(tft.textWidth(" 44:44 "));  // String width + margin
   tft.drawString(timeNow, 120, 53);
 
+  tft.unloadFont();
+
+  // Draw AM/PM in the small font, since the large clock font has no letters
+  tft.loadFont(AA_FONT_SMALL, LittleFS);
+  tft.setTextDatum(BL_DATUM);  // Bottom-left datum
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.setTextPadding(tft.textWidth(" PM "));
+  int timeWidth = tft.textWidth(timeNow);
+  tft.drawString(isPM ? "PM" : "AM", 120 + (timeWidth / 2) + 25, 53);
+  tft.unloadFont();
+
+  tft.loadFont(AA_FONT_LARGE, LittleFS);  // reload so drawSeparator/rest of code isn't affected
   drawSeparator(51);
-
   tft.setTextPadding(0);
-
   tft.unloadFont();
 }
+
+// void drawTime() {
+//   tft.loadFont(AA_FONT_LARGE, LittleFS);
+
+//   // Convert UTC to local time, returns zone code in tz1_Code, e.g "GMT"
+//   time_t local_time = TIMEZONE.toLocal(now(), &tz1_Code);
+
+//   String timeNow = "";
+
+//   if (hour(local_time) < 10) timeNow += "0";
+//   timeNow += hour(local_time);
+//   timeNow += ":";
+//   if (minute(local_time) < 10) timeNow += "0";
+//   timeNow += minute(local_time);
+
+//   tft.setTextDatum(BC_DATUM);
+//   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+//   tft.setTextPadding(tft.textWidth(" 44:44 "));  // String width + margin
+//   tft.drawString(timeNow, 120, 53);
+
+//   drawSeparator(51);
+
+//   tft.setTextPadding(0);
+
+//   tft.unloadFont();
+// }
 
 /***************************************************************************************
 **                          Draw the current weather
@@ -427,27 +503,58 @@ void drawCurrentWeather() {
 
   //Temperature large digits added in updateData() to save swapping font here
 
+//moved the wind speed number above the arrow icon
+tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
+weatherText = String(forecast->wind_speed[0], 0);
+
+if (units == "metric") weatherText += " m/s";
+else weatherText += " mph";
+
+tft.setTextDatum(BC_DATUM);  // changed from TC_DATUM to bottom-center
+tft.setTextPadding(tft.textWidth("888 m/s"));  // Max string length?
+tft.drawString(weatherText, 124, 84);  // moved from y=136 to y=84, just above the icon
+
+
+  // tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  // weatherText = String(forecast->wind_speed[0], 0);
+
+  // if (units == "metric") weatherText += " m/s";
+  // else weatherText += " mph";
+
+  // tft.setTextDatum(TC_DATUM);
+  // tft.setTextPadding(tft.textWidth("888 m/s"));  // Max string length?
+  // tft.drawString(weatherText, 124, 136);
+
+//****************Millibar units and color code the pressure 
+tft.setTextDatum(TR_DATUM);
+tft.setTextPadding(tft.textWidth(" 8888hPa"));  // Max string length?
+
+weatherText = String(forecast->pressure[0], 0);
+weatherText += " hPa";
+
+float pressureVal = forecast->pressure[0];
+if (pressureVal < 980) {
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+} else if (pressureVal < 1000) {
   tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-  weatherText = String(forecast->wind_speed[0], 0);
+} else {
+  tft.setTextColor(TFT_GREENYELLOW, TFT_BLACK);
+}
 
-  if (units == "metric") weatherText += " m/s";
-  else weatherText += " mph";
+tft.drawString(weatherText, 230, 136);
 
-  tft.setTextDatum(TC_DATUM);
-  tft.setTextPadding(tft.textWidth("888 m/s"));  // Max string length?
-  tft.drawString(weatherText, 124, 136);
-
-  if (units == "imperial") {
-    weatherText = forecast->pressure[0];
-    weatherText += " in";
-  } else {
-    weatherText = String(forecast->pressure[0], 0);
-    weatherText += " hPa";
-  }
-
-  tft.setTextDatum(TR_DATUM);
-  tft.setTextPadding(tft.textWidth(" 8888hPa"));  // Max string length?
-  tft.drawString(weatherText, 230, 136);
+/*********************orginal - just change the label, but results in wrong info for imperial*/
+  // if (units == "imperial") {
+  //   weatherText = forecast->pressure[0];
+  //   weatherText += " in";
+  // } else {
+  //   weatherText = String(forecast->pressure[0], 0);
+  //   weatherText += " hPa";
+  // }
+  //tft.setTextColor(TFT_GREENYELLOW, TFT_BLACK);
+  //tft.setTextDatum(TR_DATUM);
+  //tft.setTextPadding(tft.textWidth(" 8888hPa"));  // Max string length?
+  //tft.drawString(weatherText, 230, 136);
 
   int windAngle = (forecast->wind_deg[0] + 22.5) / 45;
   if (windAngle > 7) windAngle = 0;
@@ -490,7 +597,7 @@ void drawForecastDetail(uint16_t x, uint16_t y, uint8_t dayIndex) {
 
   tft.setTextDatum(BC_DATUM);
 
-  tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
   tft.setTextPadding(tft.textWidth("WWW"));
   tft.drawString(day, x + 25, y);
 
@@ -507,7 +614,7 @@ void drawForecastDetail(uint16_t x, uint16_t y, uint8_t dayIndex) {
 
   String highTemp = String(tmax, 0);
   String lowTemp = String(tmin, 0);
-  tft.drawString(highTemp + " " + lowTemp, x + 25, y + 17);
+  tft.drawString(highTemp + "/" + lowTemp, x + 25, y + 17);
 
   String weatherIcon = getMeteoconIcon(forecast->id[dayIndex + 4], false);
 
@@ -782,19 +889,38 @@ void printWeather(void) {
 /***************************************************************************************
 **             Convert Unix time to a "local time" time string "12:34"
 ***************************************************************************************/
+//updated to have 12hr with am/pm labels
 String strTime(time_t unixTime) {
   time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
 
-  String localTime = "";
+  uint8_t h = hour(local_time);
+  String ampm = (h < 12) ? "AM" : "PM";
+  uint8_t h12 = h % 12;
+  if (h12 == 0) h12 = 12;
 
-  if (hour(local_time) < 10) localTime += "0";
-  localTime += hour(local_time);
+  String localTime = "";
+  localTime += h12;
   localTime += ":";
   if (minute(local_time) < 10) localTime += "0";
   localTime += minute(local_time);
+  localTime += " " + ampm;
 
   return localTime;
 }
+
+// String strTime(time_t unixTime) {
+//   time_t local_time = TIMEZONE.toLocal(unixTime, &tz1_Code);
+
+//   String localTime = "";
+
+//   if (hour(local_time) < 10) localTime += "0";
+//   localTime += hour(local_time);
+//   localTime += ":";
+//   if (minute(local_time) < 10) localTime += "0";
+//   localTime += minute(local_time);
+
+//   return localTime;
+// }
 
 /***************************************************************************************
 **  Convert Unix time to a local date + time string "Oct 16 17:18", ends with newline
@@ -811,6 +937,33 @@ String strDate(time_t unixTime) {
 
   return localDate;
 }
+/*************************************************************************************
+*Backlight 
+**************************************************************************************/
+void updateBacklight() {
+  int raw = analogRead(LDR_PIN);  // 0-4095
+
+  // NOTE: verify direction against your board - see calibration note below
+  int target = map(raw, 0, 4095, maxBrightness, minBrightness);
+  target = constrain(target, minBrightness, maxBrightness);
+
+  // Smooth the change so brightness doesn't jump abruptly
+  currentBrightness = (currentBrightness * 3 + target) / 4;
+
+  ledcWrite(LDR_PWM_CHANNEL, currentBrightness);
+
+#ifdef SERIAL_MESSAGES
+  static uint32_t lastPrint = 0;
+  if (millis() - lastPrint > 5000) {
+    Serial.print("LDR raw: ");
+    Serial.print(raw);
+    Serial.print("  Backlight: ");
+    Serial.println(currentBrightness);
+    lastPrint = millis();
+  }
+#endif
+}
+
 
 /**The MIT License (MIT)
   Copyright (c) 2015 by Daniel Eichhorn
