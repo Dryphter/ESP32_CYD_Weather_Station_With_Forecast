@@ -10,6 +10,7 @@
 - **Forecast day labels:** Changed from orange to sky blue for better contrast/less yellow on screen.
 - **Forecast temps:** Added a "/" separator between high and low temperature.
 - **Wind speed label:** Moved above the wind direction arrow icon (previously below).
+- **Time Sync: changed to 6hr interval to sync time. This doesn't need to sync to the time server every minute.
 - **Barometric pressure:**
   - Removed inaccurate imperial (inHg) conversion — the OpenWeatherMap API always returns pressure in hPa regardless of the `units` setting, and the old code just relabeled the raw hPa value as "in" without converting it. Now always displays in hPa/millibars.
   - Added color coding based on pressure range: GREENYELLOW (≥1000 hPa, normal), ORANGE (980–1000 hPa, tropical storm range), RED (<980 hPa, severe low pressure).
