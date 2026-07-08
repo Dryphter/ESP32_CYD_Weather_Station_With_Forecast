@@ -828,12 +828,16 @@ void fillSegment(int x, int y, int start_angle, int sub_angle, int r, unsigned i
 
 /***************************************************************************************
 **                          Get 3 hourly index at start of next day
+**  Updated to convert to local time before compare to fix issue of skipping 'tomorrow' in the display
 ***************************************************************************************/
 int getNextDayIndex(void) {
   int index = 0;
-  String today = forecast->dt_txt[0].substring(8, 10);
+  time_t localFirst = TIMEZONE.toLocal(forecast->dt[0], &tz1_Code);
+  uint8_t todayDay = day(localFirst);
+
   for (index = 0; index < 9; index++) {
-    if (forecast->dt_txt[index].substring(8, 10) != today) break;
+    time_t localEntry = TIMEZONE.toLocal(forecast->dt[index], &tz1_Code);
+    if (day(localEntry) != todayDay) break;
   }
   return index;
 }
