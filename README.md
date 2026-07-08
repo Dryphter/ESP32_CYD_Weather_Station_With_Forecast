@@ -1,7 +1,8 @@
 ## Changes from base fork
 
 ### Bug fixes
-- Resolved a white-screen-after-WiFi-connect issue — traced to an incorrect ESP32 board selection in Arduino IDE (not a code issue). Resolved by selecting ESP32 WROVER (all versions) in Arduino IDE. 
+- Resolved a white-screen-after-WiFi-connect issue — traced to an incorrect ESP32 board selection in Arduino IDE (not a code issue). Resolved by selecting ESP32 WROVER (all versions) in Arduino IDE.
+- Corrected display of forecasted days. Due to the UNIX time comparison in getNextDayIndex(), forecast for tomorrow would get skipped/not displayed. Convert UNIX to local time before comparison to fix.  
 
 ### Display tweaks
 - **Time format:** Main clock now displays in 12-hour format with AM/PM (previously 24-hour). AM/PM is drawn in the small font since the large clock font (`NSBold36.vlw`) only contains digits and a colon.
